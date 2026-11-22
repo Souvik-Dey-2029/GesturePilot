@@ -1,0 +1,58 @@
+{
+  "camera": {
+    "device_index": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "backend": "auto",
+    "max_read_failures": 30
+  },
+  "detector": {
+    "model_path": "models/hand_landmarker.task",
+    "num_hands": 1,
+    "min_hand_detection_confidence": 0.5,
+    "min_hand_presence_confidence": 0.5,
+    "min_tracking_confidence": 0.5
+  },
+  "mapping": {
+    "margin_left": 0.15,
+    "margin_right": 0.15,
+    "margin_top": 0.15,
+    "margin_bottom": 0.2,
+    "sensitivity": 1.0,
+    "acceleration": 1.0,
+    "mirror_x": true,
+    "corner_guard_px": 1
+  },
+  "smoothing": {
+    "enabled": true,
+    "min_cutoff": 0.8,
+    "beta": 0.015,
+    "d_cutoff": 1.0,
+    "deadzone_radius_px": 2.5
+  },
+  "safety": {
+    "lost_hand_timeout_s": 0.25,
+    "min_hand_score": 0.6,
+    "recovery_frames": 3,
+    "max_consecutive_detector_errors": 3
+  },
+  "gestures": {
+    "pinch_threshold": 0.35,
+    "pinch_release_threshold": 0.52,
+    "pinch_confirm_frames": 2,
+    "pinch_cooldown_s": 0.35,
+    "two_finger_click_window_s": 0.22,
+    "two_finger_motion_threshold": 0.025,
+    "left_click_cooldown_s": 0.30,
+    "three_finger_click_window_s": 0.22,
+    "three_finger_motion_threshold": 0.025,
+    "right_click_cooldown_s": 0.35,
+    "scroll_speed": 80.0,
+    "scroll_smoothing_alpha": 0.4,
+    "scroll_deadzone_dy": 0.003,
+    "scroll_exit_duration_s": 0.10,
+    "finger_extended_ratio": 1.10,
+    "finger_curled_ratio": 1.05
+  }
+}

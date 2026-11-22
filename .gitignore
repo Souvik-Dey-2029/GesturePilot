@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / ambient Python files
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.installed.cfg
+*.egg
+build/
+dist/
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# MediaPipe models & local runtime data
+models/*.task
+*.log
+
+# Windows System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDE & Editor Configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archives & Temporary artifacts
+*.zip
+*.tar.gz

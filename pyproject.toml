@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "virtual-mouse"
+version = "1.0.0"
+description = "Touchless Windows mouse control via webcam hand tracking and computer vision."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Virtual Mouse Open Source Contributors" }
+]
+keywords = [
+    "virtual-mouse",
+    "touchless-mouse",
+    "gesture-recognition",
+    "computer-vision",
+    "mediapipe",
+    "opencv",
+    "pyautogui",
+    "accessibility"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Adaptive Technologies",
+    "Topic :: Scientific/Engineering :: Human Machine Interfaces",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+dependencies = [
+    "mediapipe>=0.10.30,<2",
+    "opencv-contrib-python>=4.8",
+    "numpy>=1.26",
+    "pyautogui==0.9.54",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+virtual-mouse = "virtual_mouse.__main__:main"
+virtual-mouse-calibrate = "virtual_mouse.tools.calibrate:main"
+virtual-mouse-preview = "virtual_mouse.tools.preview:main"
+
+[project.urls]
+Homepage = "https://github.com/souvik-hazra/VirtualMouse"
+Documentation = "https://github.com/souvik-hazra/VirtualMouse/tree/main/docs"
+Repository = "https://github.com/souvik-hazra/VirtualMouse.git"
+Issues = "https://github.com/souvik-hazra/VirtualMouse/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
