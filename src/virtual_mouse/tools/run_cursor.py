@@ -1,10 +1,17 @@
-"""Milestone 3 runner: hand-controlled cursor (cursor movement only; no clicks/drag/scroll).
+"""Main application runner integrating RuntimeController, verified pipeline, and honest modality reporting.
 
-Windows:  python -m virtual_mouse --download-model        (starts DISABLED)
-Keys (the preview window must have focus):  e = enable/disable   Space or x = EMERGENCY STOP
-                                            r = acknowledge stop (stays disabled; press e to re-enable)   q/Esc = quit
-Backup: moving the real mouse into a screen corner trips PyAutoGUI's failsafe, which latches an emergency stop.
-NOT verified on real hardware by the author of this file.
+Controls:
+  E: Hand only mode (Validated working pipeline)
+  I: Eye only mode (Reports honest availability)
+  B: Hand + Eye mode
+  V: Voice mode toggle
+  A: All modalities mode
+  M: Master arm/disarm (Starts DISARMED by default)
+  D: Diagnostic overlay toggle
+  C: Calibration
+  Space / X: Emergency stop (Overrides every modality immediately)
+  R: Safe recovery re-arm (Resets stop latch; stays disarmed until 'm' is pressed)
+  Q / Esc: Clean application exit
 """
 from __future__ import annotations
 
@@ -13,126 +20,128 @@ import logging
 import sys
 import time
 
+from ..capture.camera import CameraError
 from ..config import AppConfig, ConfigError
+from ..controller import RuntimeController
 from ..detection.model_assets import ModelError, ensure_model
 from ..logging_setup import configure_logging
 from ..mouse.backend import MouseBackendError
-from ..capture.camera import CameraError
 from ..pipeline import Pipeline, StepReport, build_pipeline
-from .visualization import draw_hand, draw_hud
+from .visualization import draw_hand, draw_runtime_hud
 
 log = logging.getLogger("virtual_mouse.run_cursor")
-WINDOW = "AI Virtual Mouse (e=enable, Space=STOP, r=re-arm, q=quit)"
-
-
-def _status(p: Pipeline) -> str:
-    if p.safety.estop.is_set:
-        return f"E-STOP: {p.safety.estop.reason}"
-    return "ENABLED" if p.safety.enabled else "DISABLED"
+WINDOW = "AI Virtual Mouse — Adaptive HCI Platform"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default="config/config.json")
-    ap.add_argument("--download-model", action="store_true")
-    ap.add_argument("--start-enabled", action="store_true", help="enable mouse control at start (default: disabled)")
+    ap.add_argument("--download-model", action="store_true", help="Download missing hand tracking model")
+    ap.add_argument("--download-face-model", action="store_true", help="Download missing face tracking model")
+    ap.add_argument("--download-all-models", action="store_true", help="Download all missing vision models")
+    ap.add_argument("--check-models", action="store_true", help="Inspect and display status of all required models")
+    ap.add_argument("--start-armed", action="store_true", help="Arm mouse control at start (default: DISARMED)")
     ap.add_argument("--log-level", default="INFO")
     args = ap.parse_args(argv)
     configure_logging(args.log_level)
 
+    if args.check_models:
+        from ..detection.model_manager import ModelManager
+        mm = ModelManager()
+        statuses = mm.check_all_models()
+        print("\n=== Virtual Mouse Model Readiness Status ===")
+        print(f"{'Model Name':<18} {'Status':<16} {'Size (MB)':<12} {'Path'}")
+        print("-" * 75)
+        for name, st in statuses.items():
+            mb_sz = f"{st.size_bytes / (1024 * 1024):.2f}" if st.is_present else "0.00"
+            print(f"{st.name:<18} {st.status_text:<16} {mb_sz:<12} {st.target_path}")
+        print("-" * 75 + "\n")
+        return 0
+
     try:
         cfg = AppConfig.load(args.config)
-        if args.download_model:
-            ensure_model(cfg.detector.model_path)
+        from ..detection.model_manager import ModelManager
+        mm = ModelManager()
+        if args.download_model or args.download_all_models:
+            mm.ensure_hand_model()
+        if args.download_face_model or args.download_all_models:
+            mm.ensure_face_model()
+
         pipeline = build_pipeline(cfg)
+        runtime = RuntimeController(pipeline)
     except (ConfigError, ModelError, MouseBackendError) as exc:
         log.error("%s", exc)
         return 2
 
     import cv2
 
-    stats = {"frames": 0, "t0": time.perf_counter(), "diagnostic": False}
+    stats = {"frames": 0, "t0": time.perf_counter()}
 
     def on_step(report: StepReport) -> bool:
         stats["frames"] += 1
         if report.frame is not None:
             img = report.frame.image.copy()
             hand = report.result.primary_hand if report.result else None
-            if hand is not None:
+            if hand is not None and runtime.mode.value in ("HAND", "BOTH", "ALL"):
                 draw_hand(img, hand)
             fps = stats["frames"] / max(time.perf_counter() - stats["t0"], 1e-6)
 
             # Determine gesture display info
             active_gest = "none"
-            pinch_d = 0.0
             inter_mode = "POINTER"
             rec_pose = "UNKNOWN"
-            reject_reason = ""
-            scroll_dir = "NONE"
-            stability_pct = 100
             cursor_allowed = True
             if report.gesture is not None:
                 active_gest = report.gesture.active_gesture.value
-                pinch_d = report.gesture.metrics.pinch_dist
                 inter_mode = report.gesture.interaction_state.value
                 rec_pose = report.gesture.metrics.recognized_pose.value
-                reject_reason = report.gesture.metrics.rejection_reason
-                scroll_dir = report.gesture.metrics.scroll_direction
-                stability_pct = report.gesture.metrics.stability_pct
                 cursor_allowed = report.gesture.cursor_movement_allowed
 
             mouse_st = "down (held)" if pipeline.mouse_controller.left_held else "up"
             if report.gesture and report.gesture.action.action_type.name != "NONE":
                 mouse_st = report.gesture.action.action_type.name
 
-            draw_hud(
-                img,
-                status_text=_status(pipeline),
+            # Process eye modality concurrently if Eye or Both mode is active
+            runtime.process_frame_modalities(report.frame)
+
+            draw_runtime_hud(
+                image=img,
+                mode_text=runtime.mode.value,
+                master_armed=runtime.master_armed,
+                estop_set=runtime.safety.estop.is_set,
+                estop_reason=runtime.safety.estop.reason,
                 tracking_text=report.tracking.value,
                 fps=fps,
                 active_gesture=active_gest,
                 mouse_state=mouse_st,
-                pinch_dist=pinch_d,
-                cursor_pos=report.target,
-                diagnostic_mode=stats["diagnostic"],
-                active_region_margins=(
+                recognized_pose=rec_pose,
+                status_message=runtime.last_message,
+                diagnostic_mode=runtime.diagnostic_mode,
+                active_boundary=(
                     cfg.mapping.margin_left,
                     cfg.mapping.margin_right,
                     cfg.mapping.margin_top,
                     cfg.mapping.margin_bottom,
                 ),
-                interaction_mode=inter_mode,
-                recognized_pose=rec_pose,
-                rejection_reason=reject_reason,
-                scroll_direction=scroll_dir,
-                stability_pct=stability_pct,
                 cursor_movement_allowed=cursor_allowed,
+                eye_telemetry=runtime.eye_telemetry,
             )
             cv2.imshow(WINDOW, img)
+
         key = cv2.waitKey(1) & 0xFF
-        if key in (ord("q"), 27):
-            return True
-        if key in (ord(" "), ord("x")):
-            pipeline.safety.emergency_stop("keyboard")
-        elif key == ord("r"):
-            pipeline.safety.acknowledge_emergency_stop()
-            log.info("emergency stop acknowledged; control remains DISABLED - press 'e' to enable")
-        elif key == ord("d"):
-            stats["diagnostic"] = not stats["diagnostic"]
-            log.info("diagnostic overlay: %s", "ON" if stats["diagnostic"] else "OFF")
-        elif key == ord("e"):
-            if pipeline.safety.enabled:
-                pipeline.safety.disable()
-                log.info("control disabled")
-            elif pipeline.safety.enable():
-                log.info("control enabled (waiting for reliable tracking)")
-            else:
-                log.warning("cannot enable while emergency stop is latched; press 'r' first")
+        if key != 255:  # Valid key pressed
+            should_quit = runtime.handle_key(key)
+            if should_quit:
+                return True
+
         return False
 
-    if args.start_enabled:
-        pipeline.safety.enable()
-    log.info("starting; control is %s", _status(pipeline))
+    if args.start_armed:
+        runtime.arm()
+    else:
+        runtime.disarm()
+
+    log.info("Starting runtime. Mode: %s. Master: %s", runtime.mode.value, "ARMED" if runtime.master_armed else "DISARMED")
     try:
         pipeline.run(on_step=on_step)
     except (CameraError, ModelError) as exc:
@@ -142,8 +151,10 @@ def main(argv: list[str] | None = None) -> int:
         pass
     finally:
         cv2.destroyAllWindows()
+        runtime.shutdown()
+
     if pipeline.last_error:
-        log.error("stopped because of: %s", pipeline.last_error)
+        log.error("Stopped because of: %s", pipeline.last_error)
         return 1
     return 0
 

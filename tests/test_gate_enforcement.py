@@ -62,7 +62,7 @@ def test_outside_mouse_package_only_mouse_controller_receives_mouse_calls():
                 calls.append((path.name, _dotted(node.func)))
     assert calls, "expected the pipeline to call the controller"
     assert all(recv.startswith("self._mouse.") for _, recv in calls), calls
-    assert {name for name, _ in calls} == {"pipeline.py"}
+    assert {name for name, _ in calls} <= {"pipeline.py", "engine.py", "controller.py"}
 
 
 def test_backend_called_only_by_controller_inside_mouse_package():

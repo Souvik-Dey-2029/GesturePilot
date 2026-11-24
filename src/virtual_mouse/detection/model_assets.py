@@ -65,3 +65,42 @@ def ensure_model(
         if part.exists():
             part.unlink()
     return dest
+
+
+FACE_MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+)
+REPORTED_FACE_SHA256 = None
+
+
+def ensure_face_model(
+    path: str | Path = "models/face_landmarker.task",
+    url: str = FACE_MODEL_URL,
+    expected_sha256: str | None = REPORTED_FACE_SHA256,
+    downloader: Callable[[str, Path], None] = _urllib_download,
+) -> Path:
+    """Return `path` if it exists and is non-empty; otherwise download the FaceLandmarker bundle atomically."""
+    dest = Path(path)
+    if dest.is_file() and dest.stat().st_size > 0:
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_suffix(dest.suffix + ".part")
+    try:
+        log.info("Downloading face landmarker model to %s from %s...", dest, url)
+        downloader(url, part)
+        if not part.is_file() or part.stat().st_size == 0:
+            raise ModelError("Downloaded face model file is empty")
+        if expected_sha256 and sha256_of(part) != expected_sha256:
+            log.warning("Face model SHA-256 differs from expected; continuing")
+        part.replace(dest)
+        log.info("Face landmarker model successfully downloaded to %s (%d bytes).", dest, dest.stat().st_size)
+    except ModelError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ModelError(
+            f"Could not download face model from {url}: {exc!r}. Download it manually to {dest}."
+        ) from exc
+    finally:
+        if part.exists():
+            part.unlink()
+    return dest

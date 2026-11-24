@@ -22,6 +22,8 @@ htmlcov/
 
 # MediaPipe models & local runtime data
 models/*.task
+models/whisper/
+config/profiles/*.db*
 *.log
 
 # Windows System Files

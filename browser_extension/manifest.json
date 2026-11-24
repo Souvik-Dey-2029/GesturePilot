@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "GesturePilot Desktop Bridge",
+  "version": "1.0.0",
+  "description": "Chrome MV3 Extension for GesturePilot touchless desktop and voice automation.",
+  "permissions": [
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "https://www.google.com/*",
+    "https://duckduckgo.com/*"
+  ],
+  "background": {
+    "service_worker": "service_worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/search*",
+        "https://duckduckgo.com/*"
+      ],
+      "js": ["content_scripts/search_extractor.js"]
+    }
+  ],
+  "action": {
+    "default_title": "GesturePilot Bridge Active"
+  }
+}
